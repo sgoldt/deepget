@@ -19,7 +19,7 @@ import torch.nn.functional as F
 
 from mlp.twolayer import TwoLayer, identity, erfscaled
 
-import generators, utils
+import transformations, utils
 
 NUM_TESTSAMPLES = 10000
 
@@ -162,11 +162,7 @@ def main():
     generator = utils.get_generator(args.generator, device)
 
     # transformation of the inputs
-    transformation = None
-    if args.transform.startswith("rand_proj_gauss_sign_to"):
-        N_in = generator.N_out
-        N_out = int("".join(filter(str.isdigit, args.transform)))
-        transformation = generators.RandomProjection(device, N_in, N_out)
+    transformation = utils.get_transformation(args.transform, device)
 
     # Define the dimensions of the problem
     D = generator.N_in

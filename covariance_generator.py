@@ -10,7 +10,6 @@
 
 import argparse
 
-import generators
 import utils
 
 import torch
@@ -51,11 +50,10 @@ def main():
     # Will use chunks of data of size (batch_size, N) or (batch_size, D) etc.
     batch_size = args.bs
 
-    # Find the right generator
+    # Find the right generator...
     generator = utils.get_generator(args.generator, device)
-
-    # transformation of the inputs
-    transformation = None
+    # ... and transformation of the inputs
+    transformation = utils.get_transformation(args.transform, generator, device)
 
     # Define the dimensions of the problem
     D = generator.N_in
@@ -74,7 +72,9 @@ def main():
             generator_cov = torch.load(
                 "moments/%s_omega.pt" % generator.name(), map_location=device
             )
-            generator_mean, generator_std = utils.get_scalar_mean_std(generator_mean_vec, generator_cov)
+            generator_mean, generator_std = utils.get_scalar_mean_std(
+                generator_mean_vec, generator_cov
+            )
         except FileNotFoundError:
             print(
                 "Could not find moments of generator. Can therefore not estimate moments of generator + transformation. Will exit now!"
