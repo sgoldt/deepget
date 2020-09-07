@@ -19,7 +19,7 @@ import torch.nn.functional as F
 
 from mlp.twolayer import TwoLayer, identity, erfscaled
 
-import transformations, utils
+import utils
 
 NUM_TESTSAMPLES = 10000
 

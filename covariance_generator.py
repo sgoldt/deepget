@@ -77,7 +77,8 @@ def main():
             )
         except FileNotFoundError:
             print(
-                "Could not find moments of generator. Can therefore not estimate moments of generator + transformation. Will exit now!"
+                "Could not find moments of generator. Can therefore not estimate "
+                "moments of generator + transformation. Will exit now!"
             )
             exit()
 
