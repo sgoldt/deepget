@@ -21,7 +21,7 @@ from twolayer import TwoLayer, identity, erfscaled
 
 import utils
 
-NUM_TESTSAMPLES = 128
+NUM_TESTSAMPLES = 10000
 
 
 class HalfMSELoss(nn.MSELoss):
