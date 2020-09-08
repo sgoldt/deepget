@@ -160,6 +160,9 @@ def main():
 
     # Find the right generator for the given scenario
     generator = utils.get_generator(args.generator, device)
+    # and define its scalar moments, which will be computed later
+    generator_mean = None
+    generator_std = None
 
     # transformation of the inputs
     transformation = utils.get_transformation(args.transform, generator, device)
@@ -167,26 +170,6 @@ def main():
     # Define the dimensions of the problem
     D = generator.N_in
     N = generator.N_out if transformation is None else transformation.N_out
-    # and its moments
-    generator_mean = None
-    generator_std = None
-
-    # get the moments of the generator to center its outputs
-    try:
-        generator_mean_vec = torch.load(
-            "moments/%s_mean_x.pt" % generator.name(), map_location=device
-        )
-        generator_cov = torch.load(
-            "moments/%s_omega.pt" % generator.name(), map_location=device
-        )
-        generator_mean, generator_std = utils.get_scalar_mean_std(
-            generator_mean_vec, generator_cov
-        )
-    except FileNotFoundError:
-        print(
-            "Could not find moments of generator %s. Will exit now!" % generator.name()
-        )
-        exit()
 
     # output file + welcome message
     model_desc = generator.name()
@@ -248,16 +231,21 @@ def main():
     end = torch.log10(torch.tensor([1.0 * args.steps])).item()
     times_to_print = list(torch.logspace(-1, end, steps=200))
 
-    # Obtain the right covariance matrices
-    generator_mean_x = torch.load(
-        "moments/%s_mean_x.pt" % generator.name(), map_location=device
-    )
-    generator_cov = torch.load(
-        "moments/%s_omega.pt" % generator.name(), map_location=device
-    )
-
+    # get the moments of the generator to center its outputs
+    try:
+        generator_mean_vec = torch.load(
+            "moments/%s_mean_x.pt" % generator.name(), map_location=device
+        )
+        generator_cov = torch.load(
+            "moments/%s_omega.pt" % generator.name(), map_location=device
+        )
+    except FileNotFoundError:
+        print(
+            "Could not find moments of generator %s. Will exit now!" % generator.name()
+        )
+        exit()
     generator_mean, generator_std = utils.get_scalar_mean_std(
-        generator_mean_x, generator_cov
+        generator_mean_vec, generator_cov
     )
 
     # generate the test set
@@ -271,8 +259,8 @@ def main():
         transformation,
     )
 
-    Omega = None
-    Phi = None
+    Omega = None  # the student input - input covariance
+    Phi = None  # the generator input - student input covariance
     # Either load pre-computed Omega and Phi, or generate from the test set
     try:
         Omega = torch.load("moments/%s_Omega.pt" % model_desc, map_location=device,)
