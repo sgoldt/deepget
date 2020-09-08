@@ -17,11 +17,11 @@ import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
 
-from mlp.twolayer import TwoLayer, identity, erfscaled
+from twolayer import TwoLayer, identity, erfscaled
 
 import utils
 
-NUM_TESTSAMPLES = 10000
+NUM_TESTSAMPLES = 128
 
 
 class HalfMSELoss(nn.MSELoss):
@@ -162,7 +162,7 @@ def main():
     generator = utils.get_generator(args.generator, device)
 
     # transformation of the inputs
-    transformation = utils.get_transformation(args.transform, device)
+    transformation = utils.get_transformation(args.transform, generator, device)
 
     # Define the dimensions of the problem
     D = generator.N_in
