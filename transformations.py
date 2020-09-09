@@ -197,7 +197,8 @@ class dcgan_cifar100_grey(Transformation):
 
 class RandomProjection(Transformation):
     """
-    Gaussian random projection with sign activation at the end (for now).
+    Random projection with Gaussian weights and sign activation function.
+
     """
     N_in = None
     N_out = None
@@ -206,7 +207,11 @@ class RandomProjection(Transformation):
         self.N_in = N_in
         self.N_out = N_out
 
-        self.weights = torch.randn(N_in, N_out).to(device)
+        weights_fname = "weights/%s_weights.pth" % self.name()
+        try:
+            self.weights = torch.load(weights_fname).to(device)
+        except FileNotFoundError:
+            raise ValueError("Did not find weights for this transform.")
 
     def name(self):
         return "rand_proj_gauss_sign_from%d_to%d" % (self.N_in, self.N_out)

@@ -132,7 +132,7 @@ def main():
                     generator,
                     generator_mean,
                     generator_std,
-                    transformation,
+                    transformation=transformation,
                 )
 
                 # Update the estimators.

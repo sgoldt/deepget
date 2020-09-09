@@ -6,6 +6,8 @@
 #
 # Author: Sebastian Goldt <goldt.sebastian@gmail.com>
 
+import re
+
 import numpy as np
 
 import torch
@@ -79,7 +81,7 @@ def get_generator(name, device):
     """
     Returns a new instance of the generator with the given name.
 
-    Paramters:
+    Parameters:
     ----------
     name : name of the generator, e.g. dcgan_cifar100_grey
     device : device on which to create the samples
@@ -106,7 +108,7 @@ def get_transformation(name, generator, device):
     """
     Returns a new instance of the transformation with the given name.
 
-    Paramters:
+    Parameters:
     ----------
     name : name of the generator, e.g. rand_proj_gauss_sign_to2048
     device : device on which to create the samples
@@ -119,10 +121,9 @@ def get_transformation(name, generator, device):
     transformation = None
     if name is None:
         transformation = None
-    elif name.startswith("rand_proj_gauss_sign_to"):
-        N_in = generator.N_out
-        # extract the outgoing dimension of this transform from its name
-        N_out = int("".join(filter(str.isdigit, name)))
+    elif name.startswith("rand_proj_gauss_sign"):
+        temp = re.findall(r"\d+", name)
+        [N_in, N_out] = list(map(int, temp))
         # create the random transformation
         transformation = transformations.RandomProjection(device, N_in, N_out)
     else:

@@ -140,7 +140,7 @@ def main():
     parser.add_argument("-M", "--M", type=int, default=2, help=M_help)
     parser.add_argument("-K", "--K", type=int, default=2, help=K_help)
     parser.add_argument("--generator", help=generator_help, default="rand")
-    parser.add_argument("--transform", help=transform_help, default="identity")
+    parser.add_argument("--transform", help=transform_help)
     parser.add_argument("--device", "-d", help=device_help)
     parser.add_argument("--lr", type=float, default=0.2, help="learning rate")
     parser.add_argument("--bs", type=int, default=1, help="mini-batch size")
@@ -160,21 +160,99 @@ def main():
 
     # Find the right generator for the given scenario
     generator = utils.get_generator(args.generator, device)
-    # and define its scalar moments, which will be computed later
-    generator_mean = None
-    generator_std = None
-
     # transformation of the inputs
     transformation = utils.get_transformation(args.transform, generator, device)
+
+    model_desc = generator.name()
+    if transformation is not None:
+        model_desc += "_" + transformation.name()
 
     # Define the dimensions of the problem
     D = generator.N_in
     N = generator.N_out if transformation is None else transformation.N_out
 
+    # get the moments of the generator to center its outputs
+    try:
+        generator_mean_vec = torch.load(
+            "moments/%s_mean_x.pt" % generator.name(), map_location=device
+        )
+        generator_cov = torch.load(
+            "moments/%s_omega.pt" % generator.name(), map_location=device
+        )
+    except FileNotFoundError:
+        print(
+            "Could not find moments of generator %s. Will exit now!" % generator.name()
+        )
+        exit()
+    # define the scalar moments of the generator's output distribution
+    generator_mean, generator_std = utils.get_scalar_mean_std(
+        generator_mean_vec, generator_cov
+    )
+
+    # Now get the moments of the inputs that come out of the transformation
+    transformation_mean = None
+    transformation_std = None
+    # Either load pre-computed Omega and Phi, or generate from the test set
+    Omega = None  # the student input - input covariance
+    Phi = None  # the generator input - student input covariance
+    try:
+        mean_x = torch.load("moments/%s_mean_x.pt" % model_desc, map_location=device,)
+        Omega = torch.load("moments/%s_Omega.pt" % model_desc, map_location=device,)
+        Phi = torch.load("moments/%s_phi.pt" % model_desc, map_location=device,)
+
+        transformation_mean, transformation_std = utils.get_scalar_mean_std(
+            mean_x, Omega
+        )
+    except FileNotFoundError:
+        pass
+
+    # networks and loss
+    g = erfscaled if args.g == "erf" else F.relu
+    gs = (g, identity)
+    student = TwoLayer(gs, N, args.K, 1, normalise1=True, std0=1e-2)
+    student.to(device)
+
+    teacher = TwoLayer(gs, D, args.M, 1, normalise1=True, std0=1)
+    nn.init.constant_(teacher.fc2.weight, 1)
+    teacher.freeze()
+    teacher.to(device)
+    B = teacher.fc1.weight.data
+    A = teacher.fc2.weight.data
+
+    # collect the parameters that are going to be optimised by SGD
+    params = []
+    params += [{"params": student.fc1.parameters()}]
+    # If we train the last layer, ensure its learning rate scales correctly
+    params += [{"params": student.fc2.parameters(), "lr": lr / N}]
+    optimizer = optim.SGD(params, lr=lr)
+    criterion = HalfMSELoss()
+
+    # when to print?
+    end = torch.log10(torch.tensor([1.0 * args.steps])).item()
+    times_to_print = list(torch.logspace(-1, end, steps=200))
+
+    # generate the test set
+    test_cs, test_xs, test_ys = utils.get_samples(
+        device,
+        NUM_TESTSAMPLES,
+        generator,
+        generator_mean,
+        generator_std,
+        teacher,
+        transformation,
+        transformation_mean,
+        transformation_std,
+    )
+
+    # If we didn't found a pre-computed Omega and Phi (which we need to store the
+    # initial conditions), we can compute them from the test set
+    if Omega is None:
+        Omega = 1 / NUM_TESTSAMPLES * test_xs.T @ test_xs
+        Phi = 1 / NUM_TESTSAMPLES * test_xs.T @ test_cs
+
+    nus = B.mm(test_cs.T) / math.sqrt(D)
+
     # output file + welcome message
-    model_desc = generator.name()
-    if transformation is not None:
-        model_desc += "_" + transformation.name()
     log_fname = "transform_online_%s_D%d_N%d_%s_M%d_K%d_lr%g_i2_s%d.dat" % (
         model_desc,
         D,
@@ -201,75 +279,10 @@ def main():
     welcome += "# Using device:" + str(device)
     log(welcome, logfile)
 
-    # networks and loss
-    g = erfscaled if args.g == "erf" else F.relu
-    gs = (g, identity)
-    student = TwoLayer(gs, N, args.K, 1, normalise1=True, std0=1e-2)
-    student.to(device)
-
-    teacher = TwoLayer(gs, D, args.M, 1, normalise1=True, std0=1)
-    nn.init.constant_(teacher.fc2.weight, 1)
-    teacher.freeze()
-    teacher.to(device)
-    B = teacher.fc1.weight.data
-    A = teacher.fc2.weight.data
-
-    # collect the parameters that are going to be optimised by SGD
-    params = []
-    params += [{"params": student.fc1.parameters()}]
-    # If we train the last layer, ensure its learning rate scales correctly
-    params += [{"params": student.fc2.parameters(), "lr": lr / N}]
-    optimizer = optim.SGD(params, lr=lr)
-    criterion = HalfMSELoss()
-
     print("# Generator, Teacher and Student: ")
     for net in [generator, teacher, student]:
         msg = "# " + str(net).replace("\n", "\n# ")
         log(msg, logfile)
-
-    # when to print?
-    end = torch.log10(torch.tensor([1.0 * args.steps])).item()
-    times_to_print = list(torch.logspace(-1, end, steps=200))
-
-    # get the moments of the generator to center its outputs
-    try:
-        generator_mean_vec = torch.load(
-            "moments/%s_mean_x.pt" % generator.name(), map_location=device
-        )
-        generator_cov = torch.load(
-            "moments/%s_omega.pt" % generator.name(), map_location=device
-        )
-    except FileNotFoundError:
-        print(
-            "Could not find moments of generator %s. Will exit now!" % generator.name()
-        )
-        exit()
-    generator_mean, generator_std = utils.get_scalar_mean_std(
-        generator_mean_vec, generator_cov
-    )
-
-    # generate the test set
-    test_cs, test_xs, test_ys = utils.get_samples(
-        device,
-        NUM_TESTSAMPLES,
-        generator,
-        generator_mean,
-        generator_std,
-        teacher,
-        transformation,
-    )
-
-    Omega = None  # the student input - input covariance
-    Phi = None  # the generator input - student input covariance
-    # Either load pre-computed Omega and Phi, or generate from the test set
-    try:
-        Omega = torch.load("moments/%s_Omega.pt" % model_desc, map_location=device,)
-        Phi = torch.load("moments/%s_phi.pt" % model_desc, map_location=device,)
-    except FileNotFoundError:
-        Omega = 1 / NUM_TESTSAMPLES * test_xs.T @ test_xs
-        Phi = 1 / NUM_TESTSAMPLES * test_xs.T @ test_cs
-
-    nus = B.mm(test_cs.T) / math.sqrt(D)
 
     msg = "# test xs: mean=%g, std=%g; test ys: std=%g" % (
         torch.mean(test_xs),
@@ -335,6 +348,8 @@ def main():
             generator_std,
             teacher,
             transformation,
+            transformation_mean,
+            transformation_std,
         )
 
         for i in range(args.bs):
