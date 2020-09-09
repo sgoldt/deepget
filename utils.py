@@ -77,6 +77,81 @@ def get_samples(
         return cs, xs, ys
 
 
+def get_inputs_by_name(
+    device,
+    P,
+    generator_name,
+    transformation_name,
+):
+    """Generates a set of samples from the generator and transformation with the given names.
+
+    The outputs of the generator are centered and re-scaled, if the
+    corresponding statistics are available. Same for the transformation.
+
+    Parameters:
+    -----------
+    device : device on which to create the samples
+    P : number of samples
+    generator_name : generative model that transforms latent variables to inputs
+    transformation_name : the transform to be applied to the generated inputs
+    """
+    # Find the right generator for the given scenario
+    generator = get_generator(generator_name, device)
+    # transformation of the inputs
+    transformation = get_transformation(transformation_name, generator, device)
+
+    model_desc = generator.name()
+    if transformation is not None:
+        model_desc += "_" + transformation.name()
+
+    # get the moments of the generator to center its outputs
+    try:
+        generator_mean_vec = torch.load(
+            "moments/%s_mean_x.pt" % generator.name(), map_location=device
+        )
+        generator_cov = torch.load(
+            "moments/%s_omega.pt" % generator.name(), map_location=device
+        )
+        print("Loaded moments of generator " + generator.name())
+    except FileNotFoundError:
+        raise ValueError(
+            "Could not find moments for generator %s!" % generator.name()
+        )
+
+    # define the scalar moments of the generator's output distribution
+    generator_mean, generator_std = get_scalar_mean_std(
+        generator_mean_vec, generator_cov
+    )
+
+    # Now get the moments of the inputs that come out of the transformation
+    transformation_mean = None  # scalar mean
+    transformation_std = None  # scalar standard deviation
+    Omega = None  # input - input covariance
+    try:
+        mean_x = torch.load("moments/%s_mean_x.pt" % model_desc, map_location=device,)
+        Omega = torch.load("moments/%s_Omega.pt" % model_desc, map_location=device,)
+
+        transformation_mean, transformation_std = get_scalar_mean_std(
+            mean_x, Omega
+        )
+    except FileNotFoundError:
+        pass
+
+    cs, xs, _ = get_samples(
+        device,
+        P,
+        generator,
+        generator_mean,
+        generator_std,
+        None,  # no teacher
+        transformation,
+        transformation_mean,
+        transformation_std,
+    )
+
+    return cs, xs
+
+
 def get_generator(name, device):
     """
     Returns a new instance of the generator with the given name.
