@@ -237,11 +237,9 @@ def main():
         NUM_TESTSAMPLES,
         generator,
         generator_mean,
-        generator_std,
         teacher,
         transformation,
         transformation_mean,
-        transformation_std,
     )
 
     # If we didn't found a pre-computed Omega and Phi (which we need to store the
@@ -345,11 +343,9 @@ def main():
             args.bs,
             generator,
             generator_mean,
-            generator_std,
             teacher,
             transformation,
             transformation_mean,
-            transformation_std,
         )
 
         for i in range(args.bs):

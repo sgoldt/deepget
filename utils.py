@@ -20,11 +20,9 @@ def get_samples(
     P,
     generator,
     generator_mean=None,
-    generator_std=None,
     teacher=None,
     transformation=None,
     transformation_mean=None,
-    transformation_std=None,
 ):
     """Generates a set of samples from the given generator and applies the given
     transformation.
@@ -57,11 +55,11 @@ def get_samples(
 
         # if statistics are available, center generator outputs
         if generator_mean is not None:
-            xs = (xs - generator_mean) / generator_std
+            xs -= generator_mean
 
         # apply transform, if given
         if transformation is not None:
-            if generator_mean is None or generator_std is None:
+            if generator_mean is None:
                 msg = "Don't apply a transformation to uncentered outputs!"
                 raise NotImplementedError(msg)
 
@@ -69,7 +67,7 @@ def get_samples(
 
             # if statistics are available, center transform outputs
             if transformation_mean is not None:
-                xs = (xs - transformation_mean) / transformation_std
+                xs -= transformation_mean
 
         # if a teacher is given, generate labels
         ys = None if teacher is None else teacher(cs)
@@ -78,10 +76,7 @@ def get_samples(
 
 
 def get_inputs_by_name(
-    device,
-    P,
-    generator_name,
-    transformation_name,
+    device, P, generator_name, transformation_name,
 ):
     """Generates a set of samples from the generator and transformation with the given names.
 
@@ -114,9 +109,7 @@ def get_inputs_by_name(
         )
         print("Loaded moments of generator " + generator.name())
     except FileNotFoundError:
-        raise ValueError(
-            "Could not find moments for generator %s!" % generator.name()
-        )
+        raise ValueError("Could not find moments for generator %s!" % generator.name())
 
     # define the scalar moments of the generator's output distribution
     generator_mean, generator_std = get_scalar_mean_std(
@@ -131,9 +124,7 @@ def get_inputs_by_name(
         mean_x = torch.load("moments/%s_mean_x.pt" % model_desc, map_location=device,)
         Omega = torch.load("moments/%s_Omega.pt" % model_desc, map_location=device,)
 
-        transformation_mean, transformation_std = get_scalar_mean_std(
-            mean_x, Omega
-        )
+        transformation_mean, transformation_std = get_scalar_mean_std(mean_x, Omega)
     except FileNotFoundError:
         pass
 
@@ -142,11 +133,9 @@ def get_inputs_by_name(
         P,
         generator,
         generator_mean,
-        generator_std,
         None,  # no teacher
         transformation,
         transformation_mean,
-        transformation_std,
     )
 
     return cs, xs
