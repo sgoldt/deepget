@@ -190,6 +190,10 @@ def get_transformation(name, generator, device):
         [N_in, N_out] = list(map(int, temp))
         # create the random transformation
         transformation = transformations.RandomProjection(device, N_in, N_out)
+    elif name == "scattering2D":
+        N_in = generator.N_out
+        N_out = 0  # is set by the transformation itself
+        transformation = transformations.Scattering2D(device, N_in, N_out)
     else:
         raise ValueError("Did not recognise the transformation, will exit now.")
 

@@ -32,7 +32,7 @@ def main():
     checkpoint_help = "checkpoint every ... steps"
     seed_help = "random number generator seed."
     parser.add_argument("--generator", help=generator_help, default="rand")
-    parser.add_argument("--transform", help=transform_help, default="identity")
+    parser.add_argument("--transform", help=transform_help)
     parser.add_argument("--device", "-d", help=device_help)
     parser.add_argument("--bs", type=int, default=4096, help="batch size.")
     parser.add_argument("--steps", type=int, default=1e9, help="number of steps")
@@ -131,7 +131,7 @@ def main():
                     batch_size,
                     generator,
                     generator_mean,
-                    generator_std,
+                    teacher=None,
                     transformation=transformation,
                 )
 

@@ -9,6 +9,10 @@
 
 from abc import ABCMeta, abstractmethod
 
+import math
+
+import kymatio.torch
+
 import torch
 
 
@@ -219,4 +223,32 @@ class RandomProjection(Transformation):
     def transform(self, xs):
         with torch.no_grad():
             zs = torch.sign(xs @ self.weights)
+        return zs
+
+
+class Scattering2D(Transformation):
+    """
+    Scattering transform in two dimensions.
+
+    """
+    N_in = None
+    N_out = None
+
+    def __init__(self, device, N_in, N_out):
+        self.N_in = N_in
+        self.N_out = 81 * 8 * 8
+
+        self.width = int(math.sqrt(N_in))
+        self.scattering = kymatio.torch.Scattering2D(J=2, shape=(self.width,
+                                                                 self.width))
+        self.scattering.to(device)
+
+    def name(self):
+        return "scattering2D"
+
+    def transform(self, xs):
+        with torch.no_grad():
+            zs = xs.reshape(-1, self.width, self.width)
+            zs = self.scattering(zs)
+        zs = torch.flatten(zs, 1, -1)
         return zs
